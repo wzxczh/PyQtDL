@@ -539,10 +539,45 @@ class SmartRenamer:
 # 配置处理函数
 # ============================================
 def get_resource_path(relative_path):
-    """获取资源文件路径"""
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
+    """获取资源文件路径 - 修复打包后路径问题"""
+    try:
+        # Nuitka 打包后的临时目录（单文件模式）
+        if hasattr(sys, '_MEIPASS'):
+            # PyInstaller 风格的临时目录
+            base_path = sys._MEIPASS
+        elif os.environ.get('NUITKA_ONEFILE_TEMP'):
+            # Nuitka 单文件模式临时目录
+            base_path = os.environ.get('NUITKA_ONEFILE_TEMP')
+        else:
+            base_path = os.path.dirname(sys.executable)
+    except:
+        # 开发环境
+        base_path = os.path.dirname(os.path.abspath(sys.argv[0]))
+    
+    # 先检查临时目录
+    temp_path = os.path.join(base_path, relative_path)
+    if os.path.exists(temp_path):
+        return temp_path
+    
+    # 检查当前执行文件所在目录
+    exe_dir = os.path.dirname(sys.executable)
+    exe_path = os.path.join(exe_dir, relative_path)
+    if os.path.exists(exe_path):
+        return exe_path
+    
+    # 检查当前工作目录（调试时）
+    current_path = os.path.join(os.getcwd(), relative_path)
+    if os.path.exists(current_path):
+        return current_path
+    
+    # 如果都找不到，尝试在父目录中查找（Nuitka打包结构）
+    for root, dirs, files in os.walk(base_path):
+        for file in files:
+            if file == os.path.basename(relative_path):
+                return os.path.join(root, file)
+    
+    # 最后的手段：返回相对路径
+    return relative_path
 
 
 def load_config():
